@@ -574,6 +574,7 @@ export interface ImportOptions {
   updateExisting: boolean;
   createMissing: boolean;
   batchSize: number;
+  name?: string;
 }
 
 // Audit Log Types
