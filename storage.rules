@@ -1,0 +1,76 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function getRole() {
+      return get(/databases/(default)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (getRole() == 'admin' || getRole() == 'super_admin');
+    }
+
+    function isStaff() {
+      return isSignedIn() && (getRole() == 'admin' || getRole() == 'super_admin'
+        || getRole() == 'product_manager' || getRole() == 'order_manager'
+        || getRole() == 'advertising_manager' || getRole() == 'analyst');
+    }
+
+    function isProductManager() {
+      return isSignedIn() && (getRole() == 'admin' || getRole() == 'super_admin'
+        || getRole() == 'product_manager');
+    }
+
+    function isAdvertisingManager() {
+      return isSignedIn() && (getRole() == 'admin' || getRole() == 'super_admin'
+        || getRole() == 'advertising_manager');
+    }
+
+    // --- Product images ---
+    match /products/{productId}/{imageName} {
+      // Public read access
+      allow read: if true;
+      // Only product managers and admins can upload
+      allow write: if isProductManager()
+        && request.resource.size < 10 * 1024 * 1024  // max 10MB
+        && request.resource.contentType.matches('image/(jpeg|png|webp|gif)');
+    }
+
+    // --- User avatars ---
+    match /users/{userId}/avatars/{avatarName} {
+      // Users can read their own avatar, public read for others
+      allow read: if true;
+      // Users can upload their own avatar
+      allow write: if isSignedIn() && request.auth.uid == userId
+        && request.resource.size < 5 * 1024 * 1024  // max 5MB
+        && request.resource.contentType.matches('image/(jpeg|png|webp)');
+    }
+
+    // --- Campaign creatives ---
+    match /campaigns/{campaignId}/{creativeName} {
+      // Public read access
+      allow read: if true;
+      // Only advertising managers and admins can upload
+      allow write: if isAdvertisingManager()
+        && request.resource.size < 10 * 1024 * 1024  // max 10MB
+        && request.resource.contentType.matches('image/(jpeg|png|webp|gif)');
+    }
+
+    // --- Import/Export files ---
+    match /imports/{userId}/{fileName} {
+      // Users can read/write their own import files
+      allow read, write: if isSignedIn() && request.auth.uid == userId
+        && request.resource.size < 50 * 1024 * 1024;  // max 50MB
+    }
+
+    // Default: deny all other access
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

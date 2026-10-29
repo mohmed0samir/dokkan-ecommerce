@@ -1,0 +1,146 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function getRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (getRole() == 'admin' || getRole() == 'super_admin');
+    }
+
+    function isStaff() {
+      return isSignedIn() && (getRole() == 'admin' || getRole() == 'super_admin'
+        || getRole() == 'product_manager' || getRole() == 'order_manager'
+        || getRole() == 'advertising_manager' || getRole() == 'analyst');
+    }
+
+    function isProductManager() {
+      return isSignedIn() && (getRole() == 'admin' || getRole() == 'super_admin'
+        || getRole() == 'product_manager');
+    }
+
+    function isOrderManager() {
+      return isSignedIn() && (getRole() == 'admin' || getRole() == 'super_admin'
+        || getRole() == 'order_manager');
+    }
+
+    function isAdvertisingManager() {
+      return isSignedIn() && (getRole() == 'admin' || getRole() == 'super_admin'
+        || getRole() == 'advertising_manager');
+    }
+
+    // --- Users collection ---
+    match /users/{userId} {
+      // Users can read their own profile
+      allow read: if isOwner(userId);
+      // Users can update their own profile (limited fields)
+      allow update: if isOwner(userId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'displayName', 'photoURL', 'phoneNumber', 'addresses', 'preferences', 'updatedAt'
+        ]);
+      // Only admins can create/delete users or change roles
+      allow create, delete: if isAdmin();
+    }
+
+    // --- Products collection ---
+    match /products/{productId} {
+      // Public read access for active/featured products
+      allow read: if true;
+      // Only product managers and admins can write
+      allow create, update, delete: if isProductManager();
+    }
+
+    // --- Categories collection ---
+    match /categories/{categoryId} {
+      // Public read access
+      allow read: if true;
+      // Only admins and product managers can write
+      allow create, update, delete: if isProductManager();
+    }
+
+    // --- Orders collection ---
+    match /orders/{orderId} {
+      // Users can read their own orders
+      allow read: if isSignedIn() && (
+        isOwner(resource.data.userId)
+        || (resource.data.guestEmail != null && resource.data.guestEmail == request.auth.token.email)
+        || isStaff()
+      );
+      // Users can create their own orders
+      allow create: if isSignedIn()
+        && (request.resource.data.userId == request.auth.uid
+          || request.resource.data.userId == null);
+      // Only order managers and admins can update orders
+      allow update, delete: if isOrderManager();
+    }
+
+    // --- Suppliers collection ---
+    match /suppliers/{supplierId} {
+      // Public read access
+      allow read: if true;
+      // Only admins and product managers can write
+      allow create, update, delete: if isProductManager();
+    }
+
+    // --- Campaigns collection ---
+    match /campaigns/{campaignId} {
+      // Public read access for active campaigns
+      allow read: if true;
+      // Only advertising managers and admins can write
+      allow create, update, delete: if isAdvertisingManager();
+    }
+
+    // --- Advertisers collection ---
+    match /advertisers/{advertiserId} {
+      // Public read for approved advertisers
+      allow read: if true;
+      // Only admins can write
+      allow create, update, delete: if isAdmin();
+    }
+
+    // --- Store settings ---
+    match /storeSettings/{settingsId} {
+      // Public read access
+      allow read: if true;
+      // Only admins can write
+      allow create, update, delete: if isAdmin();
+    }
+
+    // --- Import jobs ---
+    match /importJobs/{jobId} {
+      // Users can read their own jobs, admins can read all
+      allow read: if isSignedIn() && (
+        isOwner(resource.data.createdBy) || isStaff()
+      );
+      // Users can create their own jobs
+      allow create: if isSignedIn() && request.resource.data.createdBy == request.auth.uid;
+      // Only admins can update/delete
+      allow update, delete: if isAdmin();
+    }
+
+    // --- Audit logs ---
+    match /auditLogs/{logId} {
+      // Only admins and analysts can read
+      allow read: if isStaff();
+      // System/service writes only (no client writes)
+      allow create: if false;
+      allow update, delete: if false;
+    }
+
+    // Default: deny all other access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
