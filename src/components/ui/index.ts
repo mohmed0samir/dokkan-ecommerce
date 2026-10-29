@@ -11,4 +11,5 @@ export { Progress, CircularProgress, StepProgress } from './Progress';
 export { Skeleton, SkeletonCard, SkeletonTable, SkeletonList } from './Skeleton';
 export { Tooltip, Popover } from './Tooltip';
 export { Switch } from './Switch';
+export { ImageUpload } from './ImageUpload';
 export { ImportExportManager } from '../importExport/ImportExportManager';

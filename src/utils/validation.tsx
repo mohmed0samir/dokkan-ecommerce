@@ -19,11 +19,15 @@ export const passwordSchema = z
 
 /**
  * Phone validation schema (Saudi Arabia)
+ * Normalizes phone number by removing non-digit characters (except +) before validation
  */
-export const phoneSchema = z.string().regex(
+export const phoneSchema = z.string().transform((val) => {
+  // Normalize: keep only digits and + sign
+  return val.replace(/[^\d+]/g, '');
+}).pipe(z.string().regex(
   /^(\+966|0)?[5-9]\d{8}$/,
-  'Invalid phone number'
-);
+  'Invalid phone number. Use format: +966501234567 or 0501234567 or 501234567'
+));
 
 /**
  * Name validation schema
